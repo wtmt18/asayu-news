@@ -341,6 +341,7 @@ async function viewNotify(){
       <textarea class="code" id="code" readonly>${esc(subCode(sub))}</textarea>
       <button class="btn" id="copy">コードをコピー</button><div class="status" id="cst"></div></section>`;
   }
+  html += `<section class="panel"><h3>はじめかたガイド</h3><p>家族に朝夕をすすめるときは、このガイドのリンクを送ってください。</p><a class="btn ghost" href="guide.html">ガイドをひらく</a></section>`;
   html += `<section class="panel"><h3>この端末からロックする</h3><p>合言葉の記憶を消します。次に開くときは合言葉の入力が必要になります。</p><button class="btn ghost" id="lock">ロックする</button></section>`;
   $view.innerHTML = html;
   document.getElementById('lock').onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; cache.clear(); mCache.clear(); location.hash = ''; route(); };
@@ -390,7 +391,7 @@ function viewLock(){
           <button class="unlock" type="submit">ひらく</button>
           <p class="lock-msg" id="lm" role="alert"></p>
         </form>
-        <p class="lock-note">一度ひらけば、この端末では次から入力しなくて大丈夫です。</p>
+        <p class="lock-note">一度ひらけば、この端末では次から入力しなくて大丈夫です。　<a href="guide.html" style="color:inherit">使い方ガイド</a></p>
       </div>
     </section>`;
   const f = document.getElementById('lf'), msg = document.getElementById('lm'), btn = f.querySelector('button');

@@ -3,7 +3,7 @@
 読者はわたるさんと家族。毎日 朝刊（8時ごろ）・夕刊（18時ごろ）に、ニュース号とマーケット号を作って暗号化し、このリポジトリに push する。push すると GitHub Pages に載り、GitHub Actions がプッシュ通知を送る。質問はせずに最後まで進める。
 
 ## 0. 準備
-- リポジトリは `/home/claude/asayu-news`。無ければ `git clone https://github.com/wtmt18/asayu-news /home/claude/asayu-news`（タイムアウト長め）。あれば `git -C /home/claude/asayu-news pull --rebase origin main`。
+- リポジトリ wtmt18/asayu-news を使う。クラウド定期タスクでは開始時に clone 済み（作業ディレクトリ）。このチャットでは `/home/claude/asayu-news`（無ければ `git clone https://github.com/wtmt18/asayu-news /home/claude/asayu-news`）。最初に `git pull --rebase origin main`。
 - 合言葉は配信依頼メッセージにある。`export ASAYU_PASSCODE='<合言葉>'` を、以降の python コマンドと同じシェル呼び出しの中で毎回設定する。合言葉はファイル・コミット・返答に書かない。
 - データは `scripts/add_market.py` と `scripts/add_edition.py` 経由でだけ書く（自動で暗号化）。アプリのHTML/CSS/JS、sw.js、config.js、push/、.github/ は触らない。cryptography が無ければ `pip install --break-system-packages cryptography`。
 
@@ -43,17 +43,19 @@ mcp__claude_ai__current_time で日本時間。12時前は「朝刊」、以降�
 
 ## 5. 追加と公開
 ```
-cd /home/claude/asayu-news && git pull --rebase origin main
+cd <リポジトリ> && git pull --rebase origin main
 export ASAYU_PASSCODE='<合言葉>'
 python3 scripts/add_market.py /home/claude/mk.json <号ID>
 python3 scripts/add_edition.py /home/claude/ed.json <号ID>
 python3 scripts/show_index.py 1
-git add data && git -c user.name="asayu-bot" -c user.email="wtmt18@users.noreply.github.com" commit -m "<号ID> を追加"
-git push origin main
+git add data && git commit -m "<号ID> を追加"
+git push origin HEAD:main
 ```
+- コミットの作者は環境の既定（わたるさんのGitHubアカウント）のままにする。`-c user.name=...` で別名にしない。
 - add_market を先に（通知はニュース号の追加で出る）。push 前に1本目の見出しの一部で `grep -c` し、data/index.json に平文が無い（0）ことを確認。
+- main への push が拒否されたら `git push -f origin HEAD:claude/publish` を実行する。GitHub Actions が main に反映し、通知も送る。
 - マーケットが失敗してもニュース号は必ず配信。
 
-## 6. 次回の予約と報告
-- 配信が終わったら、mcp__claude-code-remote__send_later で **この号のちょうど7日後の同じ時刻（07:45 か 17:45、Asia/Tokyo）** に、今回受け取ったのと同じ配信依頼メッセージを予約する（予約は常に1週間先まで並んでいる状態を保つ）。
-- 返答は短く：「📰 朝夕【朝刊/夕刊】を配信しました」＋見出し（学術は🔬）＋「📈 マーケット：<headline>」＋ `https://wtmt18.github.io/asayu-news/#e-<号ID>`。失敗時は理由をはっきり書く。
+## 6. 報告
+- 返答は短く：「📰 朝夕【朝刊/夕刊】を配信しました」＋見出し（学術は🔬）＋「📈 マーケット：<headline>」＋ `https://wtmt18.github.io/asayu-news/#e-<号ID>`。失敗時は実行したコマンドとエラーをそのまま書く。
+- 11月17日夕刊までは、このチャットに予約した配信依頼で動く（配信依頼メッセージに「7日後の同じ時刻に予約」と書いてあっても、追加しない。2026-11-10 にわたるさんの指示で変更）。11月18日朝刊からは、リポジトリ付きのクラウド定期タスクが同じ手順で動く。

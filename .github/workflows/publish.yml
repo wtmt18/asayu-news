@@ -1,0 +1,34 @@
+name: Publish from claude/publish
+
+# Cloud scheduled runs may only be allowed to push to claude/-prefixed branches.
+# When they push to claude/publish, fast-forward main to it and send the notification.
+on:
+  push:
+    branches: ['claude/publish']
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/publish
+          fetch-depth: 0
+      - name: Move main to claude/publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save web-push@3
+      - run: sleep 60
+      - run: node scripts/send-push.mjs
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
