@@ -1,5 +1,5 @@
 // 朝夕 service worker: offline shell + push notifications
-const VERSION = 'asayu-v5';
+const VERSION = 'asayu-v6';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/badge-96.png'];
 

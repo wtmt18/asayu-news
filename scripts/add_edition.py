@@ -22,8 +22,10 @@ for i, it in enumerate(d["items"]):
     for k in ("section", "tag", "headline", "summary", "point", "svg", "sources"):
         if k not in it:
             sys.exit(f"item {i} missing {k}")
-    if it["section"] not in ("must", "sci"):
+    if it["section"] not in ("must", "local", "sci"):
         sys.exit(f"item {i} bad section")
+    if it["section"] == "local" and not it.get("area"):
+        sys.exit(f"item {i} local needs area")
     if not str(it["svg"]).lstrip().startswith("<svg"):
         sys.exit(f"item {i} svg must start with <svg")
 
@@ -35,7 +37,7 @@ idx = [e for e in idx if e["id"] != eid]
 idx.append({
     "id": eid, "date": d["date"], "edition": d["edition"], "title": d["title"],
     "lead": d["lead"], "createdAt": d["createdAt"],
-    "headlines": [{"s": it["section"], "h": it["headline"]} for it in d["items"]],
+    "headlines": [{"s": it["section"], "h": (f"［{it['area']}］" if it["section"] == "local" else "") + it["headline"]} for it in d["items"]],
 })
 idx.sort(key=lambda e: e["createdAt"], reverse=True)
 write_enc(ROOT / "data/index.json", idx)

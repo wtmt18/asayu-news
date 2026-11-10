@@ -14,14 +14,18 @@ mcp__claude_ai__current_time で日本時間。12時前は「朝刊」、以降�
 - `python3 scripts/show_index.py 2` で直近2号の見出し。同じ話題は大きな続報がない限り外す。
 - マーケット前回：`cd scripts && python3 -c "from asayu_crypto import *; import json; i=read_enc(ROOT/'data/market/index.json')[0]['id']; print(json.dumps(read_enc(ROOT/f'data/market/{i}.json'),ensure_ascii=False)[:6000])"`
 
-## 3. ニュース（/home/claude/ed.json）
+## 3. ニュース（/home/claude/ed.json）　items は must → local → sci の順
 - must 5〜6本：日本と世界の重要ニュース。直近12〜18時間優先、一次報道で確認。夕刊はその日の株価・為替や新しい発表も。1本目がいちばん大事なニュース。
 - sci 4〜5本：Nature、Science、ScienceDaily、Phys.org、EurekAlert、大学プレスリリース等から「へぇ」な研究。分野を散らし、材料・ものづくり・AI for Science があれば1本。
+- local（地元のニュース）：**愛知県東浦町・東京都文京区・新潟県長岡市**の3地域について、各1〜2本（合計3〜6本）。item に `"area": "愛知県東浦町"` のように地域名を入れる。
+  - 優先順：①安全に関わる情報（地震・大雨・大雪・断水・停電・交通止め・事件）②役所の発表（自治体公式サイト、区報・市政だより）③地元報道（NHK各局、中日新聞、新潟日報など）④近日のイベント・開店閉店などの暮らしの話題（号外NET、ながおか速報など）。
+  - 日付は必ず確認し、終わったイベントは載せない。新しい話題がない地域は、近日のイベントや生活情報で1本にする。
+  - 個人が特定できる事件・事故の詳細は書かない。
 - 家族向けに専門用語をかみくだく。事実は検索結果で確認。政治は中立。要約は自分の言葉で（引用しない）。
 - 形式：
 ```
-{"date","edition","title":"M月D日（曜）朝刊","lead":"押さえておきたいN本 ＋ 学術のおもろいM本","createdAt":"YYYY-MM-DDTHH:MM:SS+09:00",
- "items":[{"section":"must|sci","tag","headline","summary","point":"💡…|🤓…","svg","sources":[{"label","url"}]}]}
+{"date","edition","title":"M月D日（曜）朝刊","lead":"押さえておきたいN本 ＋ 地元L本 ＋ 学術のおもろいM本","createdAt":"YYYY-MM-DDTHH:MM:SS+09:00",
+ "items":[{"section":"must|local|sci","area":"（localのみ）","tag","headline","summary","point":"💡…|🤓…","svg","sources":[{"label","url"}]}]}
 ```
 
 ## 4. マーケット（/home/claude/mk.json）

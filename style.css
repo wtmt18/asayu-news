@@ -188,3 +188,12 @@ body.locked .tabs{display:none}
 .caution p{margin:0;font-size:.86rem;color:var(--muted);line-height:1.7}
 .issue .k.mk{color:#eef2fa;background:linear-gradient(160deg,#141a2b,#2f5a6b)}
 @media (max-width:360px){.tabs a span{font-size:.62rem}}
+
+/* ---------- local news ---------- */
+:root{--loc:#b85c00}
+@media (prefers-color-scheme:dark){:root{--loc:#ffa94d}}
+.group.local{color:var(--loc)}
+.area-h{font-size:.95rem;font-weight:700;margin:18px 22px 0;color:var(--loc)}
+.story.local .tag{color:var(--loc)}
+.story.local .ill{background:#fff4e0}
+.mark.local{background:var(--loc);border-radius:2px;transform:translateY(-2px) rotate(45deg)}

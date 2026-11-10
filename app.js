@@ -121,7 +121,7 @@ async function viewHome(){
     </header>
     <nav class="contents" aria-label="この号の記事">
       ${(latest.headlines || []).slice(1).map((x, i) =>
-        `<a href="#e-${esc(latest.id)}-${i+1}"><i class="mark ${x.s === 'sci' ? 'sci' : ''}"></i><span class="t">${esc(x.h)}</span></a>`).join('')}
+        `<a href="#e-${esc(latest.id)}-${i+1}"><i class="mark ${x.s === 'sci' ? 'sci' : x.s === 'local' ? 'local' : ''}"></i><span class="t">${esc(x.h)}</span></a>`).join('')}
     </nav>`;
   firstPaint = false;
   markRead(latest.id);
@@ -143,7 +143,7 @@ async function viewHome(){
 }
 
 function story(it, i){
-  const cls = it.section === 'sci' ? 'sci' : 'must';
+  const cls = it.section === 'sci' ? 'sci' : it.section === 'local' ? 'local' : 'must';
   const srcs = (it.sources || []).map(s => `<a href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener">${esc(s.label || '元記事')}</a>`).join('、');
   const point = String(it.point || '').replace(/^\s*(💡|🤓)\s*/, '');
   const icon = (it.point || '').trim().startsWith('🤓') || cls === 'sci' ? '🤓' : '💡';
@@ -163,7 +163,7 @@ async function viewEdition(id, focus){
   try{ e = await loadEdition(id); }catch(err){ failView('この号を読み込めませんでした。電波のよい場所で開き直してください。'); return; }
   markRead(id);
   const items = (e.items || []).map((it, i) => ({...it, _i: i}));
-  const must = items.filter(x => x.section !== 'sci'), sci = items.filter(x => x.section === 'sci');
+  const must = items.filter(x => x.section === 'must' || !x.section), sci = items.filter(x => x.section === 'sci'), loc = items.filter(x => x.section === 'local');
   const k = kind(e);
   let html = `<header class="sky mini ${k === 'pm' ? 'pm' : ''}">
       <div class="kanji" aria-hidden="true">${kanji(e)}</div>
@@ -174,10 +174,17 @@ async function viewEdition(id, focus){
     <div class="seg" role="group" aria-label="記事の絞り込み">
       <button data-f="all" aria-pressed="${filter==='all'}">すべて ${items.length}</button>
       <button data-f="must" aria-pressed="${filter==='must'}">これだけは ${must.length}</button>
+      ${loc.length ? `<button data-f="local" aria-pressed="${filter==='local'}">地元 ${loc.length}</button>` : ''}
       <button data-f="sci" aria-pressed="${filter==='sci'}">学術 ${sci.length}</button>
     </div>`;
-  if(filter !== 'sci' && must.length) html += `<h2 class="group must">これだけは押さえておく</h2>` + must.map(x => story(x, x._i)).join('');
-  if(filter !== 'must' && sci.length) html += `<h2 class="group sci">学術のおもろいやつ</h2>` + sci.map(x => story(x, x._i)).join('');
+  const show = f => filter === 'all' || filter === f;
+  if(show('must') && must.length) html += `<h2 class="group must">これだけは押さえておく</h2>` + must.map(x => story(x, x._i)).join('');
+  if(show('local') && loc.length){
+    html += `<h2 class="group local">地元のニュース</h2>`;
+    const areas = [...new Set(loc.map(x => x.area || 'その他'))];
+    for(const a of areas) html += `<h3 class="area-h">📍 ${esc(a)}</h3>` + loc.filter(x => (x.area || 'その他') === a).map(x => story(x, x._i)).join('');
+  }
+  if(show('sci') && sci.length) html += `<h2 class="group sci">学術のおもろいやつ</h2>` + sci.map(x => story(x, x._i)).join('');
   html += `<p class="foot">図はClaudeが描いたイメージです。写真は出典先でどうぞ。</p>`;
   $view.innerHTML = html;
   $view.querySelectorAll('.seg button').forEach(b => b.onclick = () => { filter = b.dataset.f; viewEdition(id); });
