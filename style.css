@@ -197,3 +197,14 @@ body.locked .tabs{display:none}
 .story.local .tag{color:var(--loc)}
 .story.local .ill{background:#fff4e0}
 .mark.local{background:var(--loc);border-radius:2px;transform:translateY(-2px) rotate(45deg)}
+
+/* ---------- my areas ---------- */
+.areas{list-style:none;margin:6px 0 12px;padding:0}
+.areas li{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--rule);font-size:.95rem}
+.areas li.none{color:var(--muted);font-size:.88rem}
+.areas .x{font-size:.8rem;color:var(--must);font-weight:700;padding:4px 8px}
+.area-form{display:flex;flex-wrap:wrap;gap:8px}
+.area-form select,.area-form input{flex:1 1 140px;padding:11px 12px;border-radius:12px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);font:inherit;font-size:1rem}
+.area-none{margin:8px 22px 0;font-size:.88rem;color:var(--muted)}
+details.others{margin:14px 0 0}
+details.others summary{margin:0 22px;padding:12px 16px;border-radius:14px;background:var(--surface);border:1px solid var(--rule);font-weight:700;font-size:.9rem;cursor:pointer;color:var(--loc)}

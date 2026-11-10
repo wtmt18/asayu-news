@@ -26,14 +26,24 @@ const known = new Set(subs.map(s => s.endpoint));
 const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}/json?poll=1&since=all`);
 const lines = (await res.text()).split('\n').filter(Boolean);
 const fresh = [];
+// encrypted "my areas" registrations: kept opaque in data/inbox.json for Claude to decrypt
+const inboxPath = 'data/inbox.json';
+const inbox = fs.existsSync(inboxPath) ? JSON.parse(fs.readFileSync(inboxPath, 'utf8')) : [];
+const seenCt = new Set(inbox.map(b => b.ct));
+let inboxAdded = 0;
 for (const line of lines) {
   let m; try { m = JSON.parse(line); } catch { continue; }
   if (m.event !== 'message' || !m.message) continue;
   let s; try { s = JSON.parse(m.message); } catch { continue; }
+  if (s && s.v === 1 && typeof s.iv === 'string' && typeof s.ct === 'string' && s.ct.length < 4000) {
+    if (!seenCt.has(s.ct)) { seenCt.add(s.ct); inbox.push({ v: 1, iv: s.iv, ct: s.ct, t: m.time }); inboxAdded++; }
+    continue;
+  }
   if (!valid(s) || known.has(s.endpoint)) continue;
   known.add(s.endpoint);
   fresh.push({ endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } });
 }
+if (inboxAdded) { fs.writeFileSync(inboxPath, JSON.stringify(inbox.slice(-200))); console.log(`inbox +${inboxAdded}`); }
 if (!fresh.length) { console.log('no new subscriptions'); process.exit(0); }
 
 const all = [...subs, ...fresh].slice(-60);

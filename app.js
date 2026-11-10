@@ -26,12 +26,17 @@ const b64e = u8 => btoa(String.fromCharCode(...new Uint8Array(u8)));
 async function deriveKey(pc){
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pc), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({name: 'PBKDF2', salt: b64d(C.salt), iterations: 310000, hash: 'SHA-256'},
-    base, {name: 'AES-GCM', length: 256}, true, ['decrypt']);
+    base, {name: 'AES-GCM', length: 256}, true, ['encrypt', 'decrypt']);
 }
 async function restoreKey(){
   const raw = store.get('k', null);
   if(!raw) return null;
-  try{ return await crypto.subtle.importKey('raw', b64d(raw), {name: 'AES-GCM'}, true, ['decrypt']); }catch(e){ return null; }
+  try{ return await crypto.subtle.importKey('raw', b64d(raw), {name: 'AES-GCM'}, true, ['encrypt', 'decrypt']); }catch(e){ return null; }
+}
+async function encryptWith(k, obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, k, new TextEncoder().encode(JSON.stringify(obj)));
+  return {v: 1, iv: b64e(iv), ct: b64e(ct)};
 }
 async function decryptWith(k, d){
   const pt = await crypto.subtle.decrypt({name: 'AES-GCM', iv: b64d(d.iv)}, k, b64d(d.ct));
@@ -181,8 +186,18 @@ async function viewEdition(id, focus){
   if(show('must') && must.length) html += `<h2 class="group must">これだけは押さえておく</h2>` + must.map(x => story(x, x._i)).join('');
   if(show('local') && loc.length){
     html += `<h2 class="group local">地元のニュース</h2>`;
+    const mine = myAreas();
     const areas = [...new Set(loc.map(x => x.area || 'その他'))];
-    for(const a of areas) html += `<h3 class="area-h">📍 ${esc(a)}</h3>` + loc.filter(x => (x.area || 'その他') === a).map(x => story(x, x._i)).join('');
+    const first = mine.length ? areas.filter(a => mine.includes(a)) : areas;
+    const rest = mine.length ? areas.filter(a => !mine.includes(a)) : [];
+    if(mine.length && !first.length) html += `<p class="area-none">登録した地域（${esc(mine.join('、'))}）のニュースは、次の号から届きます。</p>`;
+    if(!mine.length) html += `<p class="area-none">「設定」タブで地元を登録すると、その地域のニュースが先頭に表示されます。</p>`;
+    for(const a of first) html += `<h3 class="area-h">📍 ${esc(a)}</h3>` + loc.filter(x => (x.area || 'その他') === a).map(x => story(x, x._i)).join('');
+    if(rest.length){
+      html += `<details class="others"><summary>ほかの地域のニュース（${rest.length}地域）</summary>`;
+      for(const a of rest) html += `<h3 class="area-h">📍 ${esc(a)}</h3>` + loc.filter(x => (x.area || 'その他') === a).map(x => story(x, x._i)).join('');
+      html += `</details>`;
+    }
   }
   if(show('sci') && sci.length) html += `<h2 class="group sci">学術のおもろいやつ</h2>` + sci.map(x => story(x, x._i)).join('');
   html += `<p class="foot">図はClaudeが描いたイメージです。写真は出典先でどうぞ。</p>`;
@@ -299,6 +314,54 @@ async function viewMarket(id){
   window.scrollTo(0, 0);
 }
 
+
+// ---------- my local areas ----------
+const PREFS = ['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'];
+const myAreas = () => store.get('myAreas', []);
+async function sendAreas(force){
+  const areas = myAreas();
+  if(!areas.length || !KEY || !C.regTopic) return;
+  const last = store.get('areasSentAt', 0);
+  if(!force && Date.now() - last < 6 * 864e5) return;
+  const blob = await encryptWith(KEY, {type: 'areas', areas, at: new Date().toISOString()});
+  const r = await withTimeout(fetch('https://ntfy.sh/' + encodeURIComponent(C.regTopic), {method: 'POST', body: JSON.stringify(blob)}), 10000);
+  if(!r.ok) throw new Error('areas ' + r.status);
+  store.set('areasSentAt', Date.now());
+}
+function areaPanel(){
+  const areas = myAreas();
+  return `<section class="panel" id="ap"><h3>わたしの地元</h3>
+    <p>登録した地域のニュースが「地元」に優先して表示されます。新しく登録した地域は、次の号から届きます（最大3つ）。</p>
+    <ul class="areas">${areas.map((a, i) => `<li><span>📍 ${esc(a)}</span><button class="x" data-i="${i}" aria-label="${esc(a)}を削除">削除</button></li>`).join('') || '<li class="none">まだ登録されていません</li>'}</ul>
+    ${areas.length < 3 ? `<div class="area-form"><select id="pref" aria-label="都道府県"><option value="">都道府県</option>${PREFS.map(p => `<option>${p}</option>`).join('')}</select>
+      <input id="muni" type="text" placeholder="市区町村（例：長岡市）" aria-label="市区町村"><button class="btn" id="addArea">登録</button></div>` : ''}
+    <div class="status" id="ast"></div></section>`;
+}
+function bindAreaPanel(){
+  const $ast = document.getElementById('ast');
+  const save = async (areas, msg) => {
+    store.set('myAreas', areas);
+    try{ await sendAreas(true); viewNotify().then(() => { const s = document.getElementById('ast'); if(s){ s.className = 'status ok'; s.textContent = msg; } }); }
+    catch(e){ viewNotify().then(() => { const s = document.getElementById('ast'); if(s){ s.className = 'status ng'; s.textContent = '保存しましたが、送信できませんでした。電波のよい場所で開き直すと自動で再送します。'; } }); store.set('areasSentAt', 0); }
+  };
+  const add = document.getElementById('addArea');
+  if(add) add.onclick = () => {
+    const pref = document.getElementById('pref').value;
+    const muni = document.getElementById('muni').value.trim().replace(/\s+/g, '');
+    if(!pref || !muni){ $ast.className = 'status ng'; $ast.textContent = '都道府県と市区町村を入れてください。'; return; }
+    if(!/[市区町村]$/.test(muni)){ $ast.className = 'status ng'; $ast.textContent = '市区町村は「長岡市」「文京区」「東浦町」のように最後まで入れてください。'; return; }
+    const name = pref + muni;
+    const areas = myAreas();
+    if(areas.includes(name)){ $ast.className = 'status'; $ast.textContent = 'すでに登録されています。'; return; }
+    add.disabled = true;
+    save([...areas, name].slice(0, 3), `「${name}」を登録しました。次の号から地元ニュースが届きます。`);
+  };
+  document.querySelectorAll('#ap .x').forEach(b => b.onclick = () => {
+    const areas = myAreas(); areas.splice(+b.dataset.i, 1);
+    save(areas, '削除しました。');
+  });
+}
+
 // ---------- notifications ----------
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -337,20 +400,21 @@ async function ensureRegistered(){
 
 async function viewNotify(){
   setTab('notify');
-  let html = `<h1 class="plain-h">通知</h1><p class="plain-p">8:00 と 18:00 に、新しい号が届いたらお知らせします。</p>`;
+  let html = `<h1 class="plain-h">設定</h1><p class="plain-p">通知と、わたしの地元の設定です。</p>`;
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const area = areaPanel();
   const guide = `<section class="panel"><h3>はじめかたガイド</h3><p>家族に朝夕をすすめるときは、このガイドのリンクを送ってください。</p><a class="btn ghost" href="guide.html">ガイドをひらく</a></section>`;
   const lock = `<section class="panel"><h3>この端末からロックする</h3><p>合言葉の記憶を消します。次に開くときは合言葉の入力が必要になります。</p><button class="btn ghost" id="lock">ロックする</button></section>`;
   const bindLock = () => { const b = document.getElementById('lock'); if(b) b.onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; cache.clear(); mCache.clear(); location.hash = ''; route(); }; };
   if(isIOS && !isStandalone){
     html += `<section class="panel"><h3>ホーム画面のアイコンから開いてください</h3>
       <p>iPhoneでは、ホーム画面に追加した「朝夕」アイコンから開いたときだけ通知を設定できます。いまはSafariで開いています。</p>
-      <ol><li>まだなら、Safariの共有メニューから「ホーム画面に追加」</li><li>ホーム画面の「朝夕」アイコンをタップ</li><li>下の「通知」タブを開く</li></ol></section>` + guide + lock;
-    $view.innerHTML = html; bindLock(); return;
+      <ol><li>まだなら、Safariの共有メニューから「ホーム画面に追加」</li><li>ホーム画面の「朝夕」アイコンをタップ</li><li>下の「設定」タブを開く</li></ol></section>` + area + guide + lock;
+    $view.innerHTML = html; bindLock(); bindAreaPanel(); return;
   }
   if(!supported){
-    html += `<section class="panel"><h3>このブラウザは通知に対応していません</h3><p>iPhoneはiOS 16.4以降で、ホーム画面のアイコンから開いてください。AndroidはChromeで開いてください。</p></section>` + guide + lock;
-    $view.innerHTML = html; bindLock(); return;
+    html += `<section class="panel"><h3>このブラウザは通知に対応していません</h3><p>iPhoneはiOS 16.4以降で、ホーム画面のアイコンから開いてください。AndroidはChromeで開いてください。</p></section>` + area + guide + lock;
+    $view.innerHTML = html; bindLock(); bindAreaPanel(); return;
   }
   let sub = null, swErr = false;
   try{ sub = await currentSub(); }catch(e){ swErr = true; }
@@ -369,8 +433,8 @@ async function viewNotify(){
   }else{
     body = `<h3>通知をオンにする</h3><p>ボタンを押して、表示される確認で「許可」を選んでください。登録まで自動で行います。</p><button class="btn" id="on">通知をオンにする</button>`;
   }
-  html += `<section class="panel" id="np">${body}<div class="status" id="st"></div></section>` + guide + lock;
-  $view.innerHTML = html; bindLock();
+  html += `<section class="panel" id="np">${body}<div class="status" id="st"></div></section>` + area + guide + lock;
+  $view.innerHTML = html; bindLock(); bindAreaPanel();
 
   const $st = document.getElementById('st');
   const doRegister = async (s) => {
@@ -450,7 +514,7 @@ async function route(){
   if(!KEY){ KEY = await restoreKey(); }
   if(!KEY){ return viewLock(); }
   document.body.classList.remove('locked');
-  if(!window.__regChecked){ window.__regChecked = true; ensureRegistered(); }
+  if(!window.__regChecked){ window.__regChecked = true; ensureRegistered(); sendAreas(false).catch(() => {}); }
   try{
     if(h === 'search') return await viewSearch();
     if(h === 'notify') return await viewNotify();
