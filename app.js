@@ -300,80 +300,103 @@ function b64ToU8(b64){
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
 }
+function withTimeout(p, ms){
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+}
+async function swReady(){
+  if(!('serviceWorker' in navigator)) throw new Error('sw');
+  return withTimeout(navigator.serviceWorker.ready, 8000);
+}
 async function currentSub(){
   if(!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await swReady();
   return reg.pushManager.getSubscription();
 }
-function subCode(sub){
-  return btoa(unescape(encodeURIComponent(JSON.stringify(sub.toJSON()))));
+// 配信リストへの自動登録（ntfy.sh の非公開トピック経由。GitHub Actions が30分ごとに取り込む）
+async function registerSub(sub){
+  if(!C.regTopic) throw new Error('no topic');
+  const body = JSON.stringify(sub.toJSON());
+  const r = await withTimeout(fetch('https://ntfy.sh/' + encodeURIComponent(C.regTopic), {method: 'POST', body}), 10000);
+  if(!r.ok) throw new Error('register ' + r.status);
+  store.set('regEndpoint', sub.endpoint);
+  store.set('regAt', new Date().toISOString());
+}
+async function ensureRegistered(){
+  try{
+    const sub = await currentSub();
+    if(sub && store.get('regEndpoint', '') !== sub.endpoint) await registerSub(sub);
+  }catch(e){}
 }
 
 async function viewNotify(){
   setTab('notify');
   let html = `<h1 class="plain-h">通知</h1><p class="plain-p">8:00 と 18:00 に、新しい号が届いたらお知らせします。</p>`;
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const guide = `<section class="panel"><h3>はじめかたガイド</h3><p>家族に朝夕をすすめるときは、このガイドのリンクを送ってください。</p><a class="btn ghost" href="guide.html">ガイドをひらく</a></section>`;
+  const lock = `<section class="panel"><h3>この端末からロックする</h3><p>合言葉の記憶を消します。次に開くときは合言葉の入力が必要になります。</p><button class="btn ghost" id="lock">ロックする</button></section>`;
+  const bindLock = () => { const b = document.getElementById('lock'); if(b) b.onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; cache.clear(); mCache.clear(); location.hash = ''; route(); }; };
   if(isIOS && !isStandalone){
-    html += `<section class="panel"><h3>まずホーム画面に追加してください</h3>
-      <p>iPhoneでは、ホーム画面から開いたアプリだけが通知を受け取れます。</p>
-      <ol><li>Safariの下にある共有ボタンをタップ</li><li>「ホーム画面に追加」を選ぶ</li><li>ホーム画面の「朝夕」アイコンから開き、この画面に戻る</li></ol></section>`;
-    $view.innerHTML = html; return;
+    html += `<section class="panel"><h3>ホーム画面のアイコンから開いてください</h3>
+      <p>iPhoneでは、ホーム画面に追加した「朝夕」アイコンから開いたときだけ通知を設定できます。いまはSafariで開いています。</p>
+      <ol><li>まだなら、Safariの共有メニューから「ホーム画面に追加」</li><li>ホーム画面の「朝夕」アイコンをタップ</li><li>下の「通知」タブを開く</li></ol></section>` + guide + lock;
+    $view.innerHTML = html; bindLock(); return;
   }
   if(!supported){
-    html += `<section class="panel"><h3>このブラウザは通知に対応していません</h3><p>iPhoneはiOS 16.4以降のSafari、AndroidはChromeで開いてください。</p></section>`;
-    $view.innerHTML = html; return;
+    html += `<section class="panel"><h3>このブラウザは通知に対応していません</h3><p>iPhoneはiOS 16.4以降で、ホーム画面のアイコンから開いてください。AndroidはChromeで開いてください。</p></section>` + guide + lock;
+    $view.innerHTML = html; bindLock(); return;
   }
-  if(!C.vapidPublicKey){
-    html += `<section class="panel"><h3>準備中です</h3><p>通知の設定がまだ終わっていません。</p></section>`;
-    $view.innerHTML = html; return;
-  }
-  const sub = await currentSub().catch(() => null);
+  let sub = null, swErr = false;
+  try{ sub = await currentSub(); }catch(e){ swErr = true; }
   const perm = Notification.permission;
-  html += `<section class="panel" id="np">
-    <h3>${sub ? '通知はオンです' : '通知をオンにする'}</h3>
-    <p>${sub ? 'この端末に通知が届きます。' : perm === 'denied' ? '通知がブロックされています。端末の設定で「朝夕」の通知を許可してから、もう一度ボタンを押してください。' : 'ボタンを押して、表示される確認で「許可」を選んでください。'}</p>
-    ${sub ? `<button class="btn ghost" id="test">テスト通知を出す</button>` : `<button class="btn" id="on">通知をオンにする</button>`}
-    <div class="status" id="st"></div>
-  </section>`;
-  if(sub){
-    html += `<section class="panel"><h3>登録コード</h3>
-      <p>このコードをClaudeとのチャットに貼り付けると、配信リストに登録されます。一度だけで大丈夫です。</p>
-      <textarea class="code" id="code" readonly>${esc(subCode(sub))}</textarea>
-      <button class="btn" id="copy">コードをコピー</button><div class="status" id="cst"></div></section>`;
+  const reg = sub && store.get('regEndpoint', '') === sub.endpoint;
+  let body;
+  if(swErr){
+    body = `<h3>準備に失敗しました</h3><p>アプリを一度閉じて、ホーム画面のアイコンから開き直してください。</p>`;
+  }else if(sub && reg){
+    body = `<h3>✅ 通知はオンです</h3><p>この端末は配信リストに登録済みです。30分ほどで「登録できました」という通知が届き、その後は新しい号ごとにお知らせします。</p>
+      <button class="btn ghost" id="test">テスト通知を出す</button>`;
+  }else if(sub){
+    body = `<h3>あと少しです</h3><p>通知は許可されていますが、配信リストへの登録がまだです。</p><button class="btn" id="reg">登録する</button>`;
+  }else if(perm === 'denied'){
+    body = `<h3>通知がブロックされています</h3><p>iPhoneは「設定」→「通知」→「朝夕」で通知をオンにしてから、もう一度開いてください。Androidは、アドレスバーの鍵マーク →「通知」を許可にしてください。</p><button class="btn" id="on">もう一度ためす</button>`;
+  }else{
+    body = `<h3>通知をオンにする</h3><p>ボタンを押して、表示される確認で「許可」を選んでください。登録まで自動で行います。</p><button class="btn" id="on">通知をオンにする</button>`;
   }
-  html += `<section class="panel"><h3>はじめかたガイド</h3><p>家族に朝夕をすすめるときは、このガイドのリンクを送ってください。</p><a class="btn ghost" href="guide.html">ガイドをひらく</a></section>`;
-  html += `<section class="panel"><h3>この端末からロックする</h3><p>合言葉の記憶を消します。次に開くときは合言葉の入力が必要になります。</p><button class="btn ghost" id="lock">ロックする</button></section>`;
-  $view.innerHTML = html;
-  document.getElementById('lock').onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; cache.clear(); mCache.clear(); location.hash = ''; route(); };
+  html += `<section class="panel" id="np">${body}<div class="status" id="st"></div></section>` + guide + lock;
+  $view.innerHTML = html; bindLock();
 
   const $st = document.getElementById('st');
+  const doRegister = async (s) => {
+    $st.className = 'status'; $st.textContent = '配信リストに登録しています…';
+    await registerSub(s);
+    viewNotify();
+  };
   const on = document.getElementById('on');
   if(on) on.onclick = async () => {
     on.disabled = true; $st.className = 'status'; $st.textContent = '設定しています…';
     try{
       const p = await Notification.requestPermission();
-      if(p !== 'granted') throw new Error('許可されませんでした。端末の設定で通知を許可してください。');
-      const reg = await navigator.serviceWorker.ready;
-      await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64ToU8(C.vapidPublicKey)});
-      viewNotify();
+      if(p !== 'granted') throw new Error('通知が許可されませんでした。端末の設定で「朝夕」の通知を許可してください。');
+      const r = await swReady();
+      const s = (await r.pushManager.getSubscription()) || await r.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64ToU8(C.vapidPublicKey)});
+      await doRegister(s);
     }catch(err){
-      on.disabled = false; $st.className = 'status ng'; $st.textContent = err.message || '設定できませんでした。';
+      on.disabled = false; $st.className = 'status ng';
+      $st.textContent = (err && err.message && !/^(timeout|register|sw)/.test(err.message)) ? err.message : '設定できませんでした。電波のよい場所で、アプリを開き直してもう一度ためしてください。';
     }
+  };
+  const regBtn = document.getElementById('reg');
+  if(regBtn) regBtn.onclick = async () => {
+    regBtn.disabled = true;
+    try{ await doRegister(sub); }catch(e){ regBtn.disabled = false; $st.className = 'status ng'; $st.textContent = '登録できませんでした。電波のよい場所でもう一度ためしてください。'; }
   };
   const test = document.getElementById('test');
   if(test) test.onclick = async () => {
-    const reg = await navigator.serviceWorker.ready;
-    await reg.showNotification('朝夕', {body: 'テスト通知です。本番もこの形で届きます。', icon: 'icons/icon-192.png', badge: 'icons/badge-96.png'});
+    const r = await swReady();
+    await r.showNotification('朝夕', {body: 'テスト通知です。本番もこの形で届きます。', icon: 'icons/icon-192.png', badge: 'icons/badge-96.png'});
     $st.className = 'status ok'; $st.textContent = 'テスト通知を出しました。';
   };
-  const copy = document.getElementById('copy');
-  if(copy) copy.onclick = async () => {
-    const t = document.getElementById('code'), cst = document.getElementById('cst');
-    try{ await navigator.clipboard.writeText(t.value); cst.className = 'status ok'; cst.textContent = 'コピーしました。Claudeのチャットに貼り付けてください。'; }
-    catch(e){ t.select(); cst.className = 'status'; cst.textContent = '自動でコピーできませんでした。コードを長押しして全選択→コピーしてください。'; }
-  };
 }
-
 
 // ---------- lock screen ----------
 function viewLock(){
@@ -420,6 +443,7 @@ async function route(){
   if(!KEY){ KEY = await restoreKey(); }
   if(!KEY){ return viewLock(); }
   document.body.classList.remove('locked');
+  if(!window.__regChecked){ window.__regChecked = true; ensureRegistered(); }
   try{
     if(h === 'search') return await viewSearch();
     if(h === 'notify') return await viewNotify();
