@@ -209,6 +209,89 @@ async function viewSearch(){
   $q.oninput = run; run();
 }
 
+
+// ---------- market ----------
+let mIndex = null;
+const mCache = new Map();
+async function loadMIndex(){
+  if(mIndex) return mIndex;
+  try{ mIndex = await decryptWith(KEY, await getJSON('data/market/index.json')); }
+  catch(e){ if(e && e.name === 'OperationError') throw e; mIndex = []; }
+  mIndex.sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return mIndex;
+}
+async function loadMarket(id){
+  if(mCache.has(id)) return mCache.get(id);
+  const m = await decryptWith(KEY, await getJSON('data/market/' + encodeURIComponent(id) + '.json'));
+  m.id = id; mCache.set(id, m); return m;
+}
+const flag = mk => mk === 'US' ? '🇺🇸' : '🇯🇵';
+
+function pickCard(p){
+  const srcs = (p.sources || []).map(s => `<a href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener">${esc(s.label || '出典')}</a>`).join('、');
+  return `<article class="pick">
+    <header><span class="tk ${p.market === 'US' ? 'us' : 'jp'}">${flag(p.market)} ${esc(p.ticker)}</span><h4>${esc(p.name)}</h4></header>
+    <p class="biz">${esc(p.biz)}</p>
+    <dl>
+      <dt class="up">伸びるかもしれない理由</dt><dd>${esc(p.why)}</dd>
+      <dt class="dn">気をつけたいこと</dt><dd>${esc(p.risk)}</dd>
+      <dt>次に見るポイント</dt><dd>${esc(p.watch)}</dd>
+    </dl>
+    ${srcs ? `<div class="src">出典：${srcs}</div>` : ''}
+  </article>`;
+}
+
+async function viewMarket(id){
+  setTab('market');
+  const list = await loadMIndex();
+  if(!list.length){
+    $view.innerHTML = `<h1 class="plain-h">マーケット</h1><p class="empty">最初のマーケット情報は、次の 8:00 か 18:00 に届きます。</p>`;
+    return;
+  }
+  const mid = id && list.some(x => x.id === id) ? id : list[0].id;
+  let m;
+  try{ m = await loadMarket(mid); }catch(err){ if(err && err.name === 'OperationError') throw err; failView('マーケット情報を読み込めませんでした。'); return; }
+  const isLatest = mid === list[0].id;
+  let html = `<header class="sky mkt">
+      <div class="kanji" aria-hidden="true">株</div>
+      ${isLatest ? '' : `<a class="back" href="#market"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>最新へ</a>`}
+      <div class="when">${esc(dateLabel(m.date))}　${esc(m.edition)}のマーケット</div>
+      <h1>${esc(m.headline)}</h1>
+      <p class="lead">売買のおすすめではなく、調べる価値がある会社のメモです。</p>
+    </header>
+    <section class="mk-sec">
+      <h2 class="mk-h">いまの経済の流れ</h2>
+      ${m.flow.svg ? `<div class="ill flow">${safeSvg(m.flow.svg)}</div>` : ''}
+      <p class="mk-sum">${esc(m.flow.summary)}</p>
+      <ul class="flowpts">${(m.flow.points || []).map(pt => `<li><span class="ic" aria-hidden="true">${esc(pt.icon)}</span><div><b>${esc(pt.title)}</b><p>${esc(pt.text)}</p></div></li>`).join('')}</ul>
+    </section>`;
+  if((m.numbers || []).length){
+    html += `<section class="mk-sec"><h2 class="mk-h">数字で見る</h2><div class="nums">${m.numbers.map(n =>
+      `<div class="num"><span class="nl">${esc(n.label)}</span><span class="nv">${esc(n.value)}</span><span class="nn">${esc(n.note || '')}</span><span class="ns">${esc(n.src || '')}</span></div>`).join('')}</div></section>`;
+  }
+  html += `<h2 class="mk-h big">テーマと注目の会社</h2>`;
+  (m.themes || []).forEach((th, i) => {
+    html += `<section class="theme" id="t-${i}">
+      <h3>${esc(th.name)}</h3>
+      <p class="stage"><span>いまの段階</span>${esc(th.stage)}</p>
+      ${th.svg ? `<div class="ill">${safeSvg(th.svg)}</div>` : ''}
+      <p class="mk-sum">${esc(th.why)}</p>
+      ${th.leaders ? `<p class="leaders"><span>すでに上がった主役</span>${esc(th.leaders)}</p>` : ''}
+      <div class="picks">${(th.picks || []).map(pickCard).join('')}</div>
+    </section>`;
+  });
+  html += `<section class="caution"><h3>大事なおことわり</h3><p>${esc(m.caution)}</p></section>`;
+  const others = list.filter(x => x.id !== mid);
+  if(others.length){
+    html += `<h2 class="section-h">これまでのマーケット<small>${others.length}回</small></h2>`;
+    html += others.slice(0, 30).map(x => `<a class="issue" href="#m-${esc(x.id)}">
+      <span class="k mk">株</span>
+      <span><span class="h">${esc(x.headline)}</span><span class="m">${esc(dateLabel(x.date, false))}・${esc(x.edition)}・${x.picks || 0}社</span></span><span></span></a>`).join('');
+  }
+  $view.innerHTML = html;
+  window.scrollTo(0, 0);
+}
+
 // ---------- notifications ----------
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -260,7 +343,7 @@ async function viewNotify(){
   }
   html += `<section class="panel"><h3>この端末からロックする</h3><p>合言葉の記憶を消します。次に開くときは合言葉の入力が必要になります。</p><button class="btn ghost" id="lock">ロックする</button></section>`;
   $view.innerHTML = html;
-  document.getElementById('lock').onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; cache.clear(); location.hash = ''; route(); };
+  document.getElementById('lock').onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; cache.clear(); mCache.clear(); location.hash = ''; route(); };
 
   const $st = document.getElementById('st');
   const on = document.getElementById('on');
@@ -339,6 +422,8 @@ async function route(){
   try{
     if(h === 'search') return await viewSearch();
     if(h === 'notify') return await viewNotify();
+    if(h === 'market') return await viewMarket(null);
+    if(h.startsWith('m-')) return await viewMarket(h.slice(2));
     const m = h.match(/^e-(\d{4}-\d{2}-\d{2}-[a-z]+)(?:-(\d+))?$/);
     if(m) return await viewEdition(m[1], m[2] != null ? +m[2] : null);
     if(h.startsWith('e-')) return await viewEdition(h.slice(2), null);
@@ -355,10 +440,10 @@ route();
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(() => {});
   navigator.serviceWorker.addEventListener('message', ev => {
-    if(ev.data && ev.data.type === 'open' && ev.data.hash){ index = null; location.hash = ev.data.hash; }
+    if(ev.data && ev.data.type === 'open' && ev.data.hash){ index = null; mIndex = null; location.hash = ev.data.hash; }
   });
 }
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && !location.hash){ index = null; route(); }
+  if(document.visibilityState === 'visible' && (!location.hash || location.hash === '#market')){ index = null; mIndex = null; route(); }
 });
 })();
