@@ -431,7 +431,7 @@ async function viewNotify(){
   const area = areaPanel();
   const guide = `<section class="panel"><h3>はじめかたガイド</h3><p>家族に朝夕をすすめるときは、このガイドのリンクを送ってください。</p><a class="btn ghost" href="guide.html">ガイドをひらく</a></section>`;
   const lock = `<section class="panel"><h3>この端末からロックする</h3><p>合言葉の記憶を消します。次に開くときは合言葉の入力が必要になります。</p><button class="btn ghost" id="lock">ロックする</button></section>`;
-  const bindLock = () => { const b = document.getElementById('lock'); if(b) b.onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; cache.clear(); mCache.clear(); location.hash = ''; route(); }; };
+  const bindLock = () => { const b = document.getElementById('lock'); if(b) b.onclick = () => { try{ localStorage.removeItem('k'); }catch(e){} KEY = null; index = null; mIndex = null; wxNat = null; cache.clear(); mCache.clear(); location.hash = ''; route(); }; };
   if(isIOS && !isStandalone){
     html += `<section class="panel"><h3>ホーム画面のアイコンから開いてください</h3>
       <p>iPhoneでは、ホーム画面に追加した「朝夕」アイコンから開いたときだけ通知を設定できます。いまはSafariで開いています。</p>
@@ -534,6 +534,64 @@ function viewLock(){
   };
 }
 
+// ---------- 天気（全国） ----------
+let wxNat = null;
+async function loadWx(){
+  if(wxNat) return wxNat;
+  try{ wxNat = await decryptWith(KEY, await getJSON('data/weather/latest.json')); }
+  catch(e){ if(e && e.name === 'OperationError') throw e; wxNat = null; }
+  return wxNat;
+}
+const popN = p => parseInt(p, 10);
+const popCls = p => popN(p) >= 60 ? 'rain' : popN(p) >= 40 ? 'maybe' : '';
+function wxCity(c, days){
+  const d = c.d || [];
+  const t = d[0];
+  const strip = days.map((lab, i) => {
+    const x = d[i];
+    if(!x) return `<li class="na"><i>${esc(lab)}</i><span>—</span></li>`;
+    return `<li class="${popCls(x[2])}"><i>${esc(lab)}</i><b class="hi">${esc(x[0])}°</b><span class="lo">${esc(x[1])}°</span><em>${esc(x[2])}%</em></li>`;
+  }).join('');
+  return `<div class="wn-card">
+    <div class="wn-top">
+      <div class="wn-name"><b>${esc(c.name)}</b>${c.telop ? `<span class="wn-tel">${c.icon ? esc(c.icon) + ' ' : ''}${esc(c.telop)}</span>` : ''}</div>
+      ${t ? `<div class="wn-now"><span class="wn-t"><b class="hi">${esc(t[0])}℃</b><span class="lo">${esc(t[1])}℃</span></span><span class="wn-pop ${popCls(t[2])}">☂ ${esc(t[2])}%</span></div>` : ''}
+    </div>
+    <ol class="wn-strip">${strip}</ol>
+    ${c.note ? `<p class="wn-note">${esc(c.note)}</p>` : ''}
+    ${c.url ? `<a class="wx-src" href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">ウェザーニュースで見る ›</a>` : ''}
+  </div>`;
+}
+async function viewWeather(){
+  setTab('weather');
+  const w = await loadWx();
+  if(!w || !(w.regions || []).length){
+    $view.innerHTML = `<h1 class="plain-h">全国の天気</h1><p class="empty">天気は次の号（8:00 か 18:00）から届きます。</p>`;
+    return;
+  }
+  const days = w.days || [];
+  const mine = myAreas();
+  const all = w.regions.flatMap(r => r.cities);
+  const local = mine.length ? all.filter(c => mine.includes(c.area)) : [];
+  let h = `<header class="wn-head"><h1 class="plain-h">全国の天気</h1>
+    ${w.summary ? `<p class="wn-sum">${esc(w.summary)}</p>` : ''}
+    <p class="wx-note">出典：${esc(w.source || 'ウェザーニュース')}${w.at ? '（' + esc(w.at) + '時点）' : ''}　☂は降水確率</p></header>
+    <nav class="wn-chips" aria-label="地方">
+      ${local.length ? `<button type="button" data-r="wn-mine">わたしの地元</button>` : ''}
+      ${w.regions.map((r, i) => `<button type="button" data-r="wn-r${i}">${esc(r.name)}</button>`).join('')}
+    </nav>`;
+  if(local.length) h += `<section id="wn-mine" class="wn-sec"><h2 class="group wxh">わたしの地元</h2><div class="wn-grid">${local.map(c => wxCity(c, days)).join('')}</div></section>`;
+  w.regions.forEach((r, i) => {
+    h += `<section id="wn-r${i}" class="wn-sec"><h2 class="group wxh">${esc(r.name)}</h2><div class="wn-grid">${r.cities.map(c => wxCity(c, days)).join('')}</div></section>`;
+  });
+  $view.innerHTML = h;
+  $view.querySelectorAll('.wn-chips button').forEach(b => b.onclick = () => {
+    const el = document.getElementById(b.dataset.r);
+    if(el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+  window.scrollTo(0, 0);
+}
+
 // ---------- router ----------
 async function route(){
   const h = decodeURIComponent(location.hash.replace(/^#/, ''));
@@ -545,6 +603,7 @@ async function route(){
     if(h === 'search') return await viewSearch();
     if(h === 'notify') return await viewNotify();
     if(h === 'market') return await viewMarket(null);
+    if(h === 'weather') return await viewWeather();
     if(h.startsWith('m-')) return await viewMarket(h.slice(2));
     const m = h.match(/^e-(\d{4}-\d{2}-\d{2}-[a-z]+)(?:-(\d+))?$/);
     if(m) return await viewEdition(m[1], m[2] != null ? +m[2] : null);
@@ -566,6 +625,6 @@ if('serviceWorker' in navigator){
   });
 }
 document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible' && (!location.hash || location.hash === '#market')){ index = null; mIndex = null; route(); }
+  if(document.visibilityState === 'visible' && (!location.hash || location.hash === '#market' || location.hash === '#weather')){ index = null; mIndex = null; wxNat = null; route(); }
 });
 })();

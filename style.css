@@ -229,3 +229,31 @@ details.others .wx-grid{margin-top:10px}
 .wx-c{margin:8px 0 0;font-size:.85rem;line-height:1.6}
 .wx-src{display:inline-block;margin-top:6px;font-size:.75rem;color:var(--muted)}
 .wx-note{margin:8px 22px 0;font-size:.7rem;color:var(--muted)}
+
+/* 天気タブ（全国） */
+.wn-head{padding:0 0 2px}
+.wn-sum{margin:6px 22px 6px;line-height:1.75}
+.wn-chips{position:sticky;top:0;z-index:5;display:flex;gap:8px;overflow-x:auto;padding:10px 22px;background:var(--paper);-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.wn-chips::-webkit-scrollbar{display:none}
+.wn-chips button{flex:none;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 14px;font:inherit;font-size:.85rem;font-weight:700}
+.wn-sec{scroll-margin-top:56px;margin-top:4px}
+.wn-grid{display:grid;grid-template-columns:1fr;gap:10px;padding:0 22px}
+@media (min-width:560px){.wn-grid{grid-template-columns:1fr 1fr}}
+.wn-card{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:12px 14px}
+.wn-top{display:flex;align-items:flex-start;gap:10px}
+.wn-name{flex:1;display:flex;flex-direction:column;line-height:1.45}
+.wn-name b{font-size:1.02rem}
+.wn-tel{font-size:.88rem;font-weight:700}
+.wn-now{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.wn-t{display:flex;gap:8px;align-items:baseline;font-family:var(--serif);font-weight:800}
+.wn-t .hi{color:#d9480f;font-size:1.2rem}.wn-t .lo{color:#1971c2;font-size:.95rem}
+.wn-pop{font-size:.8rem;font-weight:700;color:var(--muted)}
+.wn-pop.maybe{color:#1971c2}.wn-pop.rain{color:#fff;background:#1971c2;border-radius:6px;padding:0 6px}
+.wn-strip{list-style:none;margin:10px 0 2px;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;text-align:center}
+.wn-strip li{display:flex;flex-direction:column;line-height:1.3;border-radius:10px;padding:5px 0;background:var(--paper)}
+.wn-strip li.maybe{background:rgba(25,113,194,.08)}.wn-strip li.rain{background:rgba(25,113,194,.18)}
+.wn-strip i{font-style:normal;font-size:.72rem;color:var(--muted);font-weight:700}
+.wn-strip .hi{color:#d9480f;font-size:.9rem}.wn-strip .lo{color:#1971c2;font-size:.8rem}
+.wn-strip em{font-style:normal;font-size:.72rem;font-weight:700}
+.wn-strip li.na span{color:var(--muted);padding:8px 0}
+.wn-note{margin:6px 0 0;font-size:.78rem;color:var(--muted)}

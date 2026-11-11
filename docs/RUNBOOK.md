@@ -41,6 +41,14 @@ mcp__claude_ai__current_time で日本時間。12時前は「朝刊」、以降�
 ```
 - 天気だけを後から直すときは `python3 scripts/add_edition.py <json> <号ID> --no-notify`（通知を二重に送らない）。
 
+## 3.6 天気タブ（全国の天気・/home/claude/wx.json）　毎号更新・通知なし
+- アプリ下の「天気」タブ用。号とは別ファイル（data/weather/latest.json）で、`scripts/add_weather.py` で上書きする。
+- 都市（固定）：札幌 douou/01100、仙台 miyagi/04100、東京 tokyo/13101（千代田区）、新潟 niigata/15100、金沢 ishikawa/17201、名古屋 aichi/23100、大阪 osaka/27100、広島 hiroshima/34100、高知 kouchi/39201、福岡 fukuoka/40130、鹿児島 kagoshima/46201、那覇 okinawa/47201（すべて `https://weathernews.jp/onebox/tenki/<地方>/<コード>/`）。さらに sync_areas の**登録地域すべて**を、その地方の中に入れる（area は sync_areas の地域名そのまま。わたしの地元に自動で並ぶ）。
+- 取り方：都市ごとに WebSearch（allowed_domains `weathernews.jp`）「ウェザーニュース <都市名>の天気 onebox tenki」。検索結果の本文に日別の「日付 (曜)・最高・最低・降水確率%」が並ぶので、そこから5日分を拾う（%の付いた日＝予報。ミリの日は過去なので使わない）。並列にまとめて検索してよい。
+- days は朝刊なら「きょう〜4日後」、夕刊なら「あす〜5日後」。その日が無い都市は null（作らない）。登録地域で今日の分しか取れない時は d を1日分だけにし、note に「あすからの予報は、次の号で更新します。」。
+- telop/icon はページに天気の言葉が書かれている時だけ（3.5で取った登録地域の値を流用してよい）。summary はウェザーニュースの「全国の天気予報」の概況を自分の言葉で2〜3文に。
+- 形式は scripts/add_weather.py の先頭コメントのとおり。実行：`python3 scripts/add_weather.py /home/claude/wx.json`（5. の add_market の後）。失敗してもニュース号は配信する。
+
 ## 4. マーケット（/home/claude/mk.json）
 - numbers には毎号必ず「NYダウ」「S&P500」「VIX（恐怖指数）」の直近終値と前日比を入れる（add_market.py が無いと止まる）。ほかに日経平均・TOPIX・ドル円など。値は今回の検索で確かめたものだけ（みんかぶ「米国株概況」「【恐怖指数】」記事、共同通信のNY株式終値など）。
 - 目的：すでに大きく上がった主役ではなく、流れがこれから波及しそうな会社を、理由とリスクつきで紹介。日本株・米国株の両方。テーマ3〜5、各1〜3社、計8〜12社。
@@ -64,6 +72,7 @@ mcp__claude_ai__current_time で日本時間。12時前は「朝刊」、以降�
 cd <リポジトリ> && git pull --rebase origin main
 export ASAYU_PASSCODE='<合言葉>'
 python3 scripts/add_market.py /home/claude/mk.json <号ID>
+python3 scripts/add_weather.py /home/claude/wx.json
 python3 scripts/add_edition.py /home/claude/ed.json <号ID>
 python3 scripts/show_index.py 1
 git add data && git commit -m "<号ID> を追加"
