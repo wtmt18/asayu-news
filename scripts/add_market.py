@@ -31,6 +31,11 @@ for i, t in enumerate(d["themes"]):
         if p["market"] not in ("JP", "US"):
             sys.exit(f"theme {i} pick {j} market must be JP or US")
 
+labels = " ".join(n.get("label", "") for n in d["numbers"])
+for need_label in ("ダウ", "S&P", "VIX"):
+    if need_label not in labels:
+        sys.exit(f"numbers must include {need_label} (NYダウ・S&P500・VIX は毎号必須)")
+
 (ROOT / "data/market").mkdir(parents=True, exist_ok=True)
 write_enc(ROOT / f"data/market/{mid}.json", d)
 

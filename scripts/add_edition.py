@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Add (or replace) one issue in the 朝夕 app — encrypted with the family passcode.
 
-usage: ASAYU_PASSCODE=... python3 scripts/add_edition.py <edition.json> <edition-id>
+usage: ASAYU_PASSCODE=... python3 scripts/add_edition.py <edition.json> <edition-id> [--no-notify]
+  --no-notify: fix an already-published issue without sending a push again
   edition-id: YYYY-MM-DD-am / YYYY-MM-DD-pm
 Writes data/editions/<id>.json (encrypted), updates data/index.json (encrypted)
 and data/latest.json (plain: id, edition, count only — no headlines).
@@ -10,7 +11,9 @@ Committing data/latest.json triggers the GitHub Action that sends the push notif
 import json, re, sys
 from asayu_crypto import ROOT, write_enc, read_enc
 
-src, eid = sys.argv[1], sys.argv[2]
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+quiet = "--no-notify" in sys.argv
+src, eid = args[0], args[1]
 if not re.fullmatch(r"\d{4}-\d{2}-\d{2}-[a-z]+", eid):
     sys.exit("bad edition id: " + eid)
 
@@ -29,6 +32,20 @@ for i, it in enumerate(d["items"]):
     if not str(it["svg"]).lstrip().startswith("<svg"):
         sys.exit(f"item {i} svg must start with <svg")
 
+wx = d.get("weather")
+if wx is not None:
+    if not isinstance(wx, dict) or not wx.get("day") or not isinstance(wx.get("areas"), list):
+        sys.exit("weather must be {day, source, at, areas:[...]}")
+    for j, w in enumerate(wx["areas"]):
+        for k in ("area", "telop", "url"):
+            if not w.get(k):
+                sys.exit(f"weather {j} missing {k}")
+        if not str(w["url"]).startswith("https://weathernews.jp/"):
+            sys.exit(f"weather {j} url must be a weathernews.jp page")
+        for x in w.get("pops", []):
+            if not {"t", "p"} <= set(x):
+                sys.exit(f"weather {j} pops need t and p")
+
 (ROOT / "data/editions").mkdir(parents=True, exist_ok=True)
 write_enc(ROOT / f"data/editions/{eid}.json", d)
 
@@ -42,6 +59,9 @@ idx.append({
 idx.sort(key=lambda e: e["createdAt"], reverse=True)
 write_enc(ROOT / "data/index.json", idx)
 
+if quiet:
+    print(f"ok: {eid} updated without notification")
+    sys.exit(0)
 (ROOT / "data/latest.json").write_text(json.dumps({
     "id": eid, "edition": d["edition"], "count": len(d["items"]), "createdAt": d["createdAt"],
 }, ensure_ascii=False), encoding="utf-8")

@@ -162,6 +162,31 @@ function story(it, i){
   </article>`;
 }
 
+
+function wxCard(w){
+  const pops = (w.pops || []).map(x => `<span class="wx-pop"><i>${esc(x.t)}</i>${esc(x.p)}</span>`).join('');
+  const temp = (w.max != null || w.min != null) ? `<span class="wx-t"><b class="hi">${esc(w.max ?? '-')}℃</b><span class="lo">${esc(w.min ?? '-')}℃</span></span>` : '';
+  return `<div class="wx-card">
+    <div class="wx-top"><span class="wx-ic" aria-hidden="true">${esc(w.icon || '🌤️')}</span>
+      <div class="wx-main"><b class="wx-area">${esc(w.area)}</b><span class="wx-tel">${esc(w.telop || '')}</span></div>${temp}</div>
+    ${pops ? `<div class="wx-pops"><span class="wx-pl">降水確率</span>${pops}</div>` : ''}
+    ${w.comment ? `<p class="wx-c">${esc(w.comment)}</p>` : ''}
+    ${w.url ? `<a class="wx-src" href="${esc(w.url)}" target="_blank" rel="noopener">ウェザーニュースで見る ›</a>` : ''}
+  </div>`;
+}
+function weatherBlock(wx){
+  if(!wx || !(wx.areas || []).length) return '';
+  const mine = myAreas();
+  const first = mine.length ? wx.areas.filter(w => mine.includes(w.area)) : wx.areas;
+  const rest = mine.length ? wx.areas.filter(w => !mine.includes(w.area)) : [];
+  let h = `<section class="wx"><h2 class="group wxh">${esc(wx.day || '')}の天気</h2>`;
+  if(mine.length && !first.length) h += `<p class="area-none">登録した地域（${esc(mine.join('、'))}）の天気は、次の号から届きます。</p>`;
+  h += `<div class="wx-grid">${first.map(wxCard).join('')}</div>`;
+  if(rest.length) h += `<details class="others"><summary>ほかの地域の天気（${rest.length}地域）</summary><div class="wx-grid">${rest.map(wxCard).join('')}</div></details>`;
+  h += `<p class="wx-note">出典：${esc(wx.source || 'ウェザーニュース')}${wx.at ? '（' + esc(wx.at) + '時点）' : ''}</p></section>`;
+  return h;
+}
+
 async function viewEdition(id, focus){
   setTab('home');
   let e;
@@ -183,6 +208,7 @@ async function viewEdition(id, focus){
       <button data-f="sci" aria-pressed="${filter==='sci'}">学術 ${sci.length}</button>
     </div>`;
   const show = f => filter === 'all' || filter === f;
+  if(filter === 'all' || filter === 'local') html += weatherBlock(e.weather);
   if(show('must') && must.length) html += `<h2 class="group must">これだけは押さえておく</h2>` + must.map(x => story(x, x._i)).join('');
   if(show('local') && loc.length){
     html += `<h2 class="group local">地元のニュース</h2>`;

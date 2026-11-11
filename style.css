@@ -208,3 +208,24 @@ body.locked .tabs{display:none}
 .area-none{margin:8px 22px 0;font-size:.88rem;color:var(--muted)}
 details.others{margin:14px 0 0}
 details.others summary{margin:0 22px;padding:12px 16px;border-radius:14px;background:var(--surface);border:1px solid var(--rule);font-weight:700;font-size:.9rem;cursor:pointer;color:var(--loc)}
+
+/* ---------- weather ---------- */
+.wx{margin-top:6px}
+.group.wxh{color:#1971c2}
+.wx-grid{display:grid;grid-template-columns:1fr;gap:10px;padding:0 22px}
+@media (min-width:520px){.wx-grid{grid-template-columns:1fr 1fr}}
+details.others .wx-grid{margin-top:10px}
+.wx-card{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:12px 14px}
+.wx-top{display:flex;align-items:center;gap:10px}
+.wx-ic{font-size:2rem;line-height:1}
+.wx-main{flex:1;display:flex;flex-direction:column;line-height:1.4}
+.wx-area{font-size:.85rem}
+.wx-tel{font-size:.95rem;font-weight:700}
+.wx-t{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;font-family:var(--serif);font-weight:800}
+.wx-t .hi{color:#d9480f;font-size:1.15rem}.wx-t .lo{color:#1971c2;font-size:.95rem}
+.wx-pops{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:.8rem}
+.wx-pl{color:var(--muted);font-weight:700;font-size:.72rem}
+.wx-pop{background:var(--paper);border-radius:8px;padding:1px 7px}.wx-pop i{font-style:normal;color:var(--muted);margin-right:3px;font-size:.7rem}
+.wx-c{margin:8px 0 0;font-size:.85rem;line-height:1.6}
+.wx-src{display:inline-block;margin-top:6px;font-size:.75rem;color:var(--muted)}
+.wx-note{margin:8px 22px 0;font-size:.7rem;color:var(--muted)}
